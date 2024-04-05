@@ -106,9 +106,13 @@ class myDAQScanAcquisition(DAQScanAcquisition):
 
             self.modules_manager.connect_actuators()
             self.modules_manager.connect_detectors()
-
+            
+            #take backgrounds at the beginning of each scan
+            _tadetector = self.modules_manager.get_mod_from_name('tadetector', mod = 'det')
+            _tadetector.take_background()
+            
             self.stop_scan_flag = False
-
+            
             Naxes = self.scanner.n_axes
             scan_type = self.scanner.scan_type
             self.navigation_axes = self.scanner.get_nav_axes()
