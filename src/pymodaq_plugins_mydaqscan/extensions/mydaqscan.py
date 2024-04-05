@@ -109,8 +109,8 @@ class myDAQScanAcquisition(DAQScanAcquisition):
             
             #take backgrounds at the beginning of each scan
             for det in self.modules_manager.detectors:
-                det.take_background()
-            
+                det.command_hardware.emit(utils.ThreadCommand("take_background"))
+            #will it be saved ?
             self.stop_scan_flag = False
             
             Naxes = self.scanner.n_axes
