@@ -108,9 +108,8 @@ class myDAQScanAcquisition(DAQScanAcquisition):
             self.modules_manager.connect_detectors()
             
             #take backgrounds at the beginning of each scan
-            print(self.modules_manager.detectors)
-            #_tadetector = self.modules_manager.get_mod_from_name('tadetector', mod = 'det')
-            #_tadetector.take_background()
+            for det in self.modules_manager.detectors:
+                det.take_background()
             
             self.stop_scan_flag = False
             
