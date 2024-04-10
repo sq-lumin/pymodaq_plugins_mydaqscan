@@ -117,8 +117,11 @@ class myDAQScanAcquisition(DAQScanAcquisition):
                         QtWidgets.QApplication.processEvents()
                         QThread.msleep(200) #Abritrary
                         print(det.current_data)
-                        print(det.current_data[0].name)     
-                    det.module_and_data_saver.add_bkg(det.module_and_data_saver.module_group, det.current_data)
+                        bkg = det.current_data
+                        print(det.current_data[0].name)
+                    where = det.module_and_data_saver.get_set_node()
+                    print(where)
+                    det.module_and_data_saver.add_bkg(where, bkg)
                 except Exception as e:
                     self.status_sig.emit(["Update_Status", f"{det} : {e}", 'log'])
             print(self.module_and_data_saver.get_set_node())
