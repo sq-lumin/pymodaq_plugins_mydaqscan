@@ -109,8 +109,20 @@ class myDAQScanAcquisition(DAQScanAcquisition):
             
             #take backgrounds at the beginning of each scan
             for det in self.modules_manager.detectors:
-                det.command_hardware.emit(utils.ThreadCommand("take_background"))
-            #will it be saved ?
+                try:
+                    det.command_hardware.emit(utils.ThreadCommand("take_background"))
+                    self.status_sig.emit(["Update_Status", f"{det} : Background Taken", 'log'])
+                    print(det.current_data)
+                    print(det.current_data.name)
+                    while(det.current_data[0].name[:2] != 'Bg'):
+                        #ça marche !
+                        QThread.msleep(200)
+                        print(det.current_data)
+                        print(det.current_data[0].name)
+                except Exception as e:
+                    self.status_sig.emit(["Update_Status", f"{det} : {e}", 'log'])
+            print(self.module_and_data_saver.get_set_node())
+            
             self.stop_scan_flag = False
             
             Naxes = self.scanner.n_axes
