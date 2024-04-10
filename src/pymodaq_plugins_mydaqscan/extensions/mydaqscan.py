@@ -112,13 +112,13 @@ class myDAQScanAcquisition(DAQScanAcquisition):
                 try:
                     det.command_hardware.emit(utils.ThreadCommand("take_background"))
                     self.status_sig.emit(["Update_Status", f"{det} : Background Taken", 'log'])
-                    print(det.current_data)
-                    print(det.current_data.name)
                     while(det.current_data[0].name[:2] != 'Bg'):
                         #ça marche !
-                        QThread.msleep(200)
+                        QtWidgets.QApplication.processEvents()
+                        QThread.msleep(200) #Abritrary
                         print(det.current_data)
-                        print(det.current_data[0].name)
+                        print(det.current_data[0].name)     
+                    det.module_and_data_saver.add_bkg(det.module_and_data_saver.module_group, det.current_data)
                 except Exception as e:
                     self.status_sig.emit(["Update_Status", f"{det} : {e}", 'log'])
             print(self.module_and_data_saver.get_set_node())
