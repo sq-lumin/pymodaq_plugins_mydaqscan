@@ -1,3 +1,7 @@
+from typing import Tuple
+
+from qtpy.QtCore import Signal
+
 from pymodaq.utils.config import Config
 from pymodaq.utils import data as data_mod
 from pymodaq.utils import gui_utils as gutils
@@ -19,7 +23,14 @@ logger = utils.set_logger(utils.get_module_name(__file__))
 EXTENSION_NAME = 'Custom TA Scanner'
 CLASS_NAME = 'mydaqscan'
 
-
+class ScanDataTempBkg:
+    """Convenience class to hold temporary data to be plotted in the live plots"""
+    def __init__(self, scan_index: int, indexes: Tuple[int], data: data_mod.DataToExport, bkg: data_mod.DataToExport = None):
+        self.scan_index = scan_index
+        self.indexes = indexes
+        self.data = data
+        self.bkg = bkg
+        
 class mydaqscan(DAQScan):
     # list of dicts enabling the settings tree on the user interface
     params = DAQScan.params + []
@@ -75,7 +86,7 @@ class mydaqscan(DAQScan):
             if config['scan']['scan_in_thread']:
                 scan_acquisition.moveToThread(self.scan_thread)
             self.command_daq_signal[utils.ThreadCommand].connect(scan_acquisition.queue_command)
-            scan_acquisition.scan_data_tmp[ScanDataTemp].connect(self.save_temp_live_data)
+            scan_acquisition.scan_data_tmp[ScanDataTempBkg].connect(self.save_temp_live_data)
             scan_acquisition.status_sig[list].connect(self.thread_status)
 
             self.scan_thread.scan_acquisition = scan_acquisition
@@ -89,9 +100,29 @@ class mydaqscan(DAQScan):
             self.command_daq_signal.emit(utils.ThreadCommand('start_acquisition'))
             self.ui.set_permanent_status('Running acquisition')
             logger.info('Running acquisition')
+    
+    def save_temp_live_data(self, scan_data: ScanDataTempBkg):
+        print(scan_data.data)
+        if scan_data.scan_index == 0:
+            nav_axes = self.scanner.get_nav_axes()
+            Naverage = self.settings['scan_options', 'scan_average']
+            if Naverage > 1:
+                for nav_axis in nav_axes:
+                    nav_axis.index += 1
+                nav_axes.append(data_mod.Axis('Average',
+                                              data=np.linspace(0, Naverage - 1, Naverage),
+                                              index=0))
 
+            self.extended_saver.add_nav_axes(self.h5temp.raw_group, nav_axes)
+            self.extended_saver.add_bkg(self.h5temp.raw_group, scan_data.data[-2:])
+        self.extended_saver.add_data(self.h5temp.raw_group, scan_data.data, scan_data.indexes,
+                                     distribution=self.scanner.distribution)
+        if self.settings['plot_options', 'plot_at_each_step']:
+            self.update_live_plots()
 
 class myDAQScanAcquisition(DAQScanAcquisition):
+    
+    scan_data_tmp = Signal(ScanDataTempBkg)
     
     def __init__(self, scan_settings: Parameter = None, scanner: Scanner = None,
                  h5saver_settings: Parameter = None, modules_manager: ModulesManager = None,
@@ -107,24 +138,19 @@ class myDAQScanAcquisition(DAQScanAcquisition):
             self.modules_manager.connect_actuators()
             self.modules_manager.connect_detectors()
             
-            #take backgrounds at the beginning of each scan
-            for det in self.modules_manager.detectors:
-                try:
-                    det.command_hardware.emit(utils.ThreadCommand("take_background"))
-                    self.status_sig.emit(["Update_Status", f"{det} : Background Taken", 'log'])
-                    while(det.current_data[0].name[:2] != 'Bg'):
-                        #ça marche !
-                        QtWidgets.QApplication.processEvents()
-                        QThread.msleep(200) #Abritrary
-                        print(det.current_data)
-                        bkg = det.current_data
-                        print(det.current_data[0].name)
-                    where = det.module_and_data_saver.get_set_node()
-                    print(where)
-                    det.module_and_data_saver.add_bkg(where, bkg)
-                except Exception as e:
-                    self.status_sig.emit(["Update_Status", f"{det} : {e}", 'log'])
-            print(self.module_and_data_saver.get_set_node())
+            #take backgrounds at the beginning of each scan: VERY BUGGY
+            # for det in self.modules_manager.detectors:
+            #     try:
+            #         det.command_hardware.emit(utils.ThreadCommand("take_background"))
+            #         self.status_sig.emit(["Update_Status", f"{det} : Background Taken", 'log'])
+            #         while(det.current_data[0].name[:2] != 'Bg'):    #Wait for the acquisition of the background
+            #             QtWidgets.QApplication.processEvents()
+            #             QThread.msleep(200) #Abritrary
+            #         bkg = det.current_data
+            #         where = det.module_and_data_saver.get_set_node()
+            #         det.module_and_data_saver.add_bkg(where, bkg)
+            #     except Exception as e:
+            #         self.status_sig.emit(["Update_Status", f"{det} : {e}", 'log'])
             
             self.stop_scan_flag = False
             
@@ -174,8 +200,8 @@ class myDAQScanAcquisition(DAQScanAcquisition):
 
                     QThread.msleep(self.scan_settings['time_flow', 'wait_time_between'])
 
-                    #grab datas and wait for grab completion
-                    self.det_done(self.modules_manager.grab_datas(positions=positions), positions)
+                    #grab datas and wait for grab completion. Also take a background if it's the first scan
+                    self.det_done(self.modules_manager.grab_datas(positions=positions, also_do_bkg = (self.ind_scan==0)), positions)
 
                     if self.isadaptive:
                         #todo update for v4
@@ -212,6 +238,16 @@ class myDAQScanAcquisition(DAQScanAcquisition):
     def det_done(self, det_done_datas: data_mod.DataToExport, positions):
         ###Copy pasted from the parent class.
         try:
+            # if self.ind_scan == 0:
+            #     for det in self.modules_manager.detectors:
+            #         det.command_hardware.emit(utils.ThreadCommand("take_background"))
+            #         self.status_sig.emit(["Update_Status", f"{det} : Background Taken", 'log'])
+            #         while(det.current_data[0].name[:2] != 'Bg'):    #Wait for the acquisition of the background
+            #             QtWidgets.QApplication.processEvents()
+            #             QThread.msleep(200) #Abritrary
+            #         data_bkg = det.current_data
+            # else:
+            #     data_bkg = None
             indexes = self.scanner.get_indexes_from_scan_index(self.ind_scan)
             if self.Naverage > 1:
                 indexes = [self.ind_average] + list(indexes)
@@ -234,13 +270,12 @@ class myDAQScanAcquisition(DAQScanAcquisition):
                     nav_axis.append(np.array(positions[ind_ax]))
 
             self.det_done_flag = True
-
+            
             full_names: list = self.scan_settings['plot_options', 'plot_0d']['selected'][:]
             full_names.extend(self.scan_settings['plot_options', 'plot_1d']['selected'][:])
             data_temp = det_done_datas.get_data_from_full_names(full_names, deepcopy=False)
             data_temp = data_temp.get_data_with_naxes_lower_than(2-len(indexes))  # maximum Data2D included nav indexes
-
-            self.scan_data_tmp.emit(ScanDataTemp(self.ind_scan, indexes, data_temp))
+            self.scan_data_tmp.emit(ScanDataTempBkg(self.ind_scan, indexes, data_temp))
             
         except Exception as e:
             logger.exception(str(e))
