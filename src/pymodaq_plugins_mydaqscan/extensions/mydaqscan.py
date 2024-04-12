@@ -103,6 +103,7 @@ class mydaqscan(DAQScan):
     
     def save_temp_live_data(self, scan_data: ScanDataTempBkg):
         print(scan_data.data)
+        print(scan_data.bkg)
         if scan_data.scan_index == 0:
             nav_axes = self.scanner.get_nav_axes()
             Naverage = self.settings['scan_options', 'scan_average']
@@ -114,12 +115,66 @@ class mydaqscan(DAQScan):
                                               index=0))
 
             self.extended_saver.add_nav_axes(self.h5temp.raw_group, nav_axes)
-            self.extended_saver.add_bkg(self.h5temp.raw_group, scan_data.data[-2:])
-        self.extended_saver.add_data(self.h5temp.raw_group, scan_data.data, scan_data.indexes,
-                                     distribution=self.scanner.distribution)
+            self.extended_saver.add_data(self.h5temp.raw_group, scan_data.data, scan_data.indexes,
+                                             distribution=self.scanner.distribution)
+            #data_bkg = scan_data.data[-2:]
+            #data = scan_data.data[:2]
+            #data_bkg[0].name, data_bkg[1].name = data[0].name, data[1].name
+            #self.extended_saver.add_data(self.h5temp.raw_group, scan_data.data, scan_data.indexes, distribution=self.scanner.distribution)
+            
+            #TODO : find a better way to match each bkg to it's corresponding data
+            for bkg in scan_data.bkg:
+                if bkg.name == 'Bg_fluo':
+                    bkg.name = 'I_ON'
+                elif bkg.name == 'Bg_dark':
+                    bkg.name = 'I_OFF'
+
+            for dwa in scan_data.bkg:
+                dwa.save = True 
+            for det in self.modules_manager.detectors:
+                print(det.detector)
+                scan_node = self.module_and_data_saver.get_set_node()
+                detector_node = det.module_and_data_saver.get_set_node(scan_node)
+                #det.module_and_data_saver.add_bkg(detector_node, scan_data.bkg)
+            self.extended_saver.add_bkg(detector_node, scan_data.bkg)
+        else:
+            self.extended_saver.add_data(self.h5temp.raw_group, scan_data.data, scan_data.indexes,
+                                         distribution=self.scanner.distribution)
+        
         if self.settings['plot_options', 'plot_at_each_step']:
             self.update_live_plots()
+    
+    # def plot_from(self):
+    #     self.get_det_data_list(self.modules_manager)
+    #     data0D = self.modules_manager.settings['data_dimensions', 'det_data_list0D']
+    #     data1D = self.modules_manager.settings['data_dimensions', 'det_data_list1D']
+    #     data0D['selected'] = data0D['all_items']
+    #     data1D['selected'] = data1D['all_items']
+    #     self.settings.child('plot_options', 'plot_0d').setValue(data0D)
+    #     self.settings.child('plot_options', 'plot_1d').setValue(data1D)
 
+    #Really should be a modules_manager method but how can I subclass it and make my own so it's used by pymodaq ?
+    # def get_det_data_list(self, modules_manager):
+    #     """Do a snap of selected detectors, to get the list of all the data and processed data"""
+    #     modules_manager.connect_detectors()
+    #     datas = modules_manager.grab_datas(also_do_bkg = True)
+
+    #     data_list0D = datas.get_full_names('data0D')
+    #     data_list1D = datas.get_full_names('data1D')
+    #     data_list2D = datas.get_full_names('data2D')
+    #     data_listND = datas.get_full_names('dataND')
+
+    #     modules_manager.settings.child('data_dimensions', 'det_data_list0D').setValue(
+    #         dict(all_items=data_list0D, selected=[]))
+    #     modules_manager.settings.child('data_dimensions', 'det_data_list1D').setValue(
+    #         dict(all_items=data_list1D, selected=[]))
+    #     modules_manager.settings.child('data_dimensions', 'det_data_list2D').setValue(
+    #         dict(all_items=data_list2D, selected=[]))
+    #     modules_manager.settings.child('data_dimensions', 'det_data_listND').setValue(
+    #         dict(all_items=data_listND, selected=[]))
+
+    #     modules_manager.connect_detectors(False)
+        
 class myDAQScanAcquisition(DAQScanAcquisition):
     
     scan_data_tmp = Signal(ScanDataTempBkg)
@@ -270,12 +325,21 @@ class myDAQScanAcquisition(DAQScanAcquisition):
                     nav_axis.append(np.array(positions[ind_ax]))
 
             self.det_done_flag = True
-            
             full_names: list = self.scan_settings['plot_options', 'plot_0d']['selected'][:]
             full_names.extend(self.scan_settings['plot_options', 'plot_1d']['selected'][:])
+            
+            data_bkg = None
+            
+            if self.ind_scan == 0:
+                bkg_names = [data.name for data in det_done_datas if data.name.split('/')[-1][:2] == 'Bg'] 
+                full_name = ''.join(full_names[0].split('/')[:-1]) 
+                bkg_full_names = [f'{full_name}/{bkg_name}' for bkg_name in bkg_names]
+                if bkg_full_names != []:
+                    data_bkg = det_done_datas.get_data_from_full_names(bkg_full_names, deepcopy=False)
+            
             data_temp = det_done_datas.get_data_from_full_names(full_names, deepcopy=False)
             data_temp = data_temp.get_data_with_naxes_lower_than(2-len(indexes))  # maximum Data2D included nav indexes
-            self.scan_data_tmp.emit(ScanDataTempBkg(self.ind_scan, indexes, data_temp))
+            self.scan_data_tmp.emit(ScanDataTempBkg(self.ind_scan, indexes, data_temp, data_bkg))
             
         except Exception as e:
             logger.exception(str(e))
