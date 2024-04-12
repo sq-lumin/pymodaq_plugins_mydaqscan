@@ -102,8 +102,6 @@ class mydaqscan(DAQScan):
             logger.info('Running acquisition')
     
     def save_temp_live_data(self, scan_data: ScanDataTempBkg):
-        print(scan_data.data)
-        print(scan_data.bkg)
         if scan_data.scan_index == 0:
             nav_axes = self.scanner.get_nav_axes()
             Naverage = self.settings['scan_options', 'scan_average']
@@ -132,7 +130,6 @@ class mydaqscan(DAQScan):
             for dwa in scan_data.bkg:
                 dwa.save = True 
             for det in self.modules_manager.detectors:
-                print(det.detector)
                 scan_node = self.module_and_data_saver.get_set_node()
                 detector_node = det.module_and_data_saver.get_set_node(scan_node)
                 #det.module_and_data_saver.add_bkg(detector_node, scan_data.bkg)
