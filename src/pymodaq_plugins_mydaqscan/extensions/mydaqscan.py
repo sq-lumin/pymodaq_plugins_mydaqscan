@@ -30,7 +30,7 @@ class ScanDataTempBkg:
         self.indexes = indexes
         self.data = data
         self.bkg = bkg
-        
+
 class mydaqscan(DAQScan):
     # list of dicts enabling the settings tree on the user interface
     params = DAQScan.params + []
@@ -38,7 +38,7 @@ class mydaqscan(DAQScan):
     def __init__(self, dockarea, dashboard):
         super().__init__(dockarea, dashboard)
     
-    #Copy pasted from parent class, with scan_acquisition changed for my own class myDAQScanAcquisition
+    # Copy pasted from parent class, with scan_acquisition changed for my own class myDAQScanAcquisition
     def start_scan(self):
         """
             Start an acquisition calling the set_scan function.
@@ -333,16 +333,19 @@ class myDAQScanAcquisition(DAQScanAcquisition):
                 bkg_full_names = [f'{full_name}/{bkg_name}' for bkg_name in bkg_names]
                 if bkg_full_names != []:
                     data_bkg = det_done_datas.get_data_from_full_names(bkg_full_names, deepcopy=False)
-            
+
+            # backgrounds are not in the 'full_names' list, that's why we extract them just above
             data_temp = det_done_datas.get_data_from_full_names(full_names, deepcopy=False)
             data_temp = data_temp.get_data_with_naxes_lower_than(2-len(indexes))  # maximum Data2D included nav indexes
             self.scan_data_tmp.emit(ScanDataTempBkg(self.ind_scan, indexes, data_temp, data_bkg))
             
         except Exception as e:
             logger.exception(str(e))
-    
+
+
 def main():
     pass
+
 
 if __name__ == '__main__':
     main()
