@@ -23,6 +23,7 @@ logger = utils.set_logger(utils.get_module_name(__file__))
 EXTENSION_NAME = 'Custom TA Scanner'
 CLASS_NAME = 'mydaqscan'
 
+
 class ScanDataTempBkg:
     """Convenience class to hold temporary data to be plotted in the live plots"""
     def __init__(self, scan_index: int, indexes: Tuple[int], data: data_mod.DataToExport, bkg: data_mod.DataToExport = None):
@@ -30,6 +31,7 @@ class ScanDataTempBkg:
         self.indexes = indexes
         self.data = data
         self.bkg = bkg
+
 
 class mydaqscan(DAQScan):
     # list of dicts enabling the settings tree on the user interface
@@ -285,7 +287,6 @@ class myDAQScanAcquisition(DAQScanAcquisition):
         except Exception as e:
             logger.exception(str(e))
             # self.status_sig.emit(["Update_Status", getLineInfo() + str(e), 'log'])
-
 
     def det_done(self, det_done_datas: data_mod.DataToExport, positions):
         ###Copy pasted from the parent class.
